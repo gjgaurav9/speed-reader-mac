@@ -29,24 +29,6 @@ final class DebugOverlay {
     }
 }
 
-private final class OverlayWindow: NSWindow {
-    init(contentRect: NSRect) {
-        super.init(
-            contentRect: contentRect,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        level = .screenSaver
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        backgroundColor = .clear
-        isOpaque = false
-        hasShadow = false
-    }
-
-    override var canBecomeKey: Bool { true }
-}
-
 private final class DebugBoxesView: NSView {
     private let capture: CaptureResult
     private let result: OCRResult

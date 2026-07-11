@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let regionSelector = RegionSelector()
     private let debugOverlay = DebugOverlay()
+    private let readingOverlay = ReadingOverlay()
 
     private static let widgetFrameKey = "widgetFrame"
 
@@ -48,6 +49,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         readItem.target = self
         menu.addItem(readItem)
+
+        let debugItem = NSMenuItem(
+            title: "Show OCR Boxes (Debug)",
+            action: #selector(startDebugBoxes),
+            keyEquivalent: ""
+        )
+        debugItem.target = self
+        menu.addItem(debugItem)
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
@@ -158,17 +167,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Reading pipeline (Milestone 2: capture → OCR → debug boxes)
+    // MARK: - Reading pipeline (select region → capture → OCR → read)
 
     @objc private func startReading() {
+        beginCapture(debugBoxes: false)
+    }
+
+    @objc private func startDebugBoxes() {
+        beginCapture(debugBoxes: true)
+    }
+
+    private func beginCapture(debugBoxes: Bool) {
         if debugOverlay.isVisible {
             debugOverlay.dismiss()
+        }
+        if readingOverlay.isActive {
+            readingOverlay.stop(notify: false)
         }
 
         guard ScreenCapture.hasPermission() else {
             ScreenCapture.requestPermission()
             widgetModel.flash(
-                "Enable Screen Recording for SpeedReader in System Settings, then quit and reopen.",
+                "Enable Screen Recording for Speed Reader in System Settings, then quit and reopen.",
                 for: 10
             )
             ScreenCapture.openSystemSettings()
@@ -179,13 +199,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         regionSelector.begin { [weak self] selection in
             guard let self, let selection else { return }
             Task { @MainActor in
-                await self.read(selection: selection)
+                await self.read(selection: selection, debugBoxes: debugBoxes)
             }
         }
     }
 
     @MainActor
-    private func read(selection: RegionSelector.Selection) async {
+    private func read(selection: RegionSelector.Selection, debugBoxes: Bool) async {
         do {
             widgetModel.flash("Reading…", for: 30)
             let capture = try await ScreenCapture.capture(
@@ -199,10 +219,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            debugOverlay.show(capture: capture, result: result)
-            widgetModel.flash(
-                "\(result.lines.count) lines · \(result.wordCount) words · \(Int(result.duration * 1000)) ms"
-            )
+            if debugBoxes {
+                debugOverlay.show(capture: capture, result: result)
+                widgetModel.flash(
+                    "\(result.lines.count) lines · \(result.wordCount) words · \(Int(result.duration * 1000)) ms"
+                )
+            } else {
+                widgetModel.flash("\(result.wordCount) words · go!", for: 3)
+                readingOverlay.start(capture: capture, result: result) { [weak self] stats in
+                    let verb = stats.finished ? "Finished" : "Stopped"
+                    self?.widgetModel.flash(
+                        "\(verb): \(stats.wordsRead) words in \(Int(stats.elapsed))s · \(stats.effectiveWPM) wpm effective",
+                        for: 8
+                    )
+                }
+            }
         } catch {
             widgetModel.flash("Capture failed: \(error.localizedDescription)", for: 8)
         }

@@ -9,21 +9,28 @@ behind the design.
 
 - ✅ **Milestone 1 — skeleton**: menu-bar app, always-on-top floating widget
   (WPM slider with pace indicator, Focus/Guide mode picker, guide style +
-  chunk-size options), global hotkey, position persistence.
-- ⬜ Milestone 2 — capture + OCR (ScreenCaptureKit → Vision, word/line boxes,
-  debug box viewer).
-- ⬜ Milestone 3 — the reader (freeze-frame overlay, word-highlight animation,
-  timing engine, keyboard controls).
-- ⬜ Milestone 4 — polish (guide styles, line dimming, pause rules, stats,
-  multi-monitor).
+  chunk-size options), global hotkey, position persistence, minimize to an
+  orange line (click to reopen).
+- ✅ **Milestone 2 — capture + OCR**: ScreenCaptureKit region capture,
+  drag-to-select picker, Vision OCR with per-line and per-word screen-space
+  boxes, debug box viewer (menu → Show OCR Boxes).
+- ✅ **Milestone 3 — the reader**: freeze-frame Focus mode with line dimming,
+  live Guide mode, chunked word-highlight stepping with the research-backed
+  timing engine (punctuation/paragraph pauses, number slowdown), keyboard
+  controls, progress HUD, session stats.
+- ⬜ Milestone 4 — polish (settings depth, stats history, multi-monitor
+  hardening, scroll-to-continue).
 - ⬜ Milestone 5 — ship (signing, notarization, Sparkle, onboarding).
 
 ## Run
 
 ```sh
-swift build
-.build/debug/SpeedReader
+Support/build-app.sh --run
 ```
+
+This assembles and launches `build/SpeedReader.app`. (A plain `swift build`
+binary also works, but macOS then attributes the Screen Recording permission
+to your terminal instead of Speed Reader.)
 
 The widget appears in the top-right corner; the hare icon lives in the menu
 bar. No Dock icon — it's a menu-bar utility.
@@ -33,8 +40,11 @@ bar. No Dock icon — it's a menu-bar utility.
 | Action | How |
 |---|---|
 | Show/hide widget | ⌥⇧R (global) or menu-bar icon → Show/Hide Widget |
+| Minimize widget | ✕ on the widget → orange line; click the line to reopen |
 | Move widget | Drag anywhere on it (position is remembered) |
 | Reading options | Gear icon on the widget |
+| Start reading | Read Screen button → drag-select the text region |
+| While reading | Space/click pause · ←/→ sentence jump · ↑/↓ ±25 wpm · Esc exit |
 | Quit | Menu-bar icon → Quit Speed Reader |
 
 Clicking the widget never steals focus from the app you're reading
