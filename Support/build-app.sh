@@ -15,10 +15,22 @@ mkdir -p "$APP/Contents/MacOS"
 cp .build/release/SpeedReader "$APP/Contents/MacOS/SpeedReader"
 cp Support/Info.plist "$APP/Contents/Info.plist"
 
-# Ad-hoc signature for local dev. Note: every rebuild changes the code
-# hash, so macOS may ask you to re-enable Screen Recording after a
-# rebuild. A stable Apple Development certificate fixes that (Milestone 5).
-codesign --force --deep --sign - "$APP"
+# Prefer a stable signing identity (e.g. a self-signed "SpeedReader Dev"
+# certificate, or a real Apple Development cert) so the Screen Recording
+# grant survives rebuilds. Ad-hoc fallback changes the code hash on every
+# build, which silently invalidates the TCC grant.
+IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/.*"\(.*\)".*/\1/p' | head -1)
+if [ -n "$IDENTITY" ]; then
+    echo "Signing with: $IDENTITY"
+    codesign --force --deep --sign "$IDENTITY" "$APP"
+else
+    echo "No signing identity found - using ad-hoc signature."
+    echo "(Screen Recording permission will reset on each rebuild;"
+    echo " create a self-signed 'SpeedReader Dev' code-signing cert"
+    echo " in Keychain Access to fix this.)"
+    codesign --force --deep --sign - "$APP"
+fi
 
 echo "Built $APP"
 if [ "$1" = "--run" ]; then
