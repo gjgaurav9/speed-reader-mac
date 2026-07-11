@@ -18,8 +18,9 @@ behind the design.
   live Guide mode, chunked word-highlight stepping with the research-backed
   timing engine (punctuation/paragraph pauses, number slowdown), keyboard
   controls, progress HUD, session stats.
-- ⬜ Milestone 4 — polish (settings depth, stats history, multi-monitor
-  hardening, scroll-to-continue).
+- ✅ **Milestone 4 — polish**: global hotkeys (⌥⇧S read, ⌥⇧A re-read last
+  region — the scroll-and-continue flow), highlight color + dimming
+  intensity settings, persistent daily reading stats in the widget.
 - ⬜ Milestone 5 — ship (signing, notarization, Sparkle, onboarding).
 
 ## Run
@@ -40,6 +41,8 @@ bar. No Dock icon — it's a menu-bar utility.
 | Action | How |
 |---|---|
 | Show/hide widget | ⌥⇧R (global) or menu-bar icon → Show/Hide Widget |
+| Start reading (global) | ⌥⇧S — select a region and go |
+| Re-read last region | ⌥⇧A — after scrolling, keep reading the same spot |
 | Minimize widget | ✕ on the widget → orange line; click the line to reopen |
 | Move widget | Drag anywhere on it (position is remembered) |
 | Reading options | Gear icon on the widget |

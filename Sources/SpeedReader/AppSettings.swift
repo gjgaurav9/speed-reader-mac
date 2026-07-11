@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum ReadingMode: String, CaseIterable, Identifiable {
@@ -22,6 +23,26 @@ enum GuideStyle: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum GuideColor: String, CaseIterable, Identifiable {
+    case orange = "Orange"
+    case green = "Green"
+    case blue = "Blue"
+    case pink = "Pink"
+
+    var id: String { rawValue }
+
+    var nsColor: NSColor {
+        switch self {
+        case .orange: return .systemOrange
+        case .green: return .systemGreen
+        case .blue: return .systemBlue
+        case .pink: return .systemPink
+        }
+    }
+
+    var color: Color { Color(nsColor: nsColor) }
+}
+
 /// UserDefaults-backed settings shared by the widget UI and (later) the reading engine.
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
@@ -30,6 +51,13 @@ final class AppSettings: ObservableObject {
     @AppStorage("chunkSize") var chunkSize: Int = 1
     @AppStorage("readingMode") var readingModeRaw: String = ReadingMode.focus.rawValue
     @AppStorage("guideStyle") var guideStyleRaw: String = GuideStyle.wordHighlight.rawValue
+    @AppStorage("guideColor") var guideColorRaw: String = GuideColor.orange.rawValue
+    @AppStorage("dimOpacity") var dimOpacity: Double = 0.55
+
+    var guideColor: GuideColor {
+        get { GuideColor(rawValue: guideColorRaw) ?? .orange }
+        set { guideColorRaw = newValue.rawValue }
+    }
 
     var readingMode: ReadingMode {
         get { ReadingMode(rawValue: readingModeRaw) ?? .focus }

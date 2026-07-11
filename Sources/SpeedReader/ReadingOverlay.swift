@@ -52,7 +52,9 @@ final class ReadingOverlay {
             capture: capture,
             script: script,
             mode: settings.readingMode,
-            style: settings.guideStyle
+            style: settings.guideStyle,
+            accent: settings.guideColor.nsColor,
+            dimOpacity: settings.dimOpacity
         )
         view.onKey = { [weak self] key in self?.handle(key) }
         window.contentView = view
@@ -172,6 +174,8 @@ private final class ReaderView: NSView {
     private let script: ReadingScript
     private let mode: ReadingMode
     private let style: GuideStyle
+    private let accent: NSColor
+    private let dimOpacity: Double
 
     private var index = 0
     private var paused = false
@@ -179,13 +183,20 @@ private final class ReaderView: NSView {
     private var progress: Double = 0
     private var remaining: TimeInterval = 0
 
-    private let accent = NSColor.systemOrange
-
-    init(capture: CaptureResult, script: ReadingScript, mode: ReadingMode, style: GuideStyle) {
+    init(
+        capture: CaptureResult,
+        script: ReadingScript,
+        mode: ReadingMode,
+        style: GuideStyle,
+        accent: NSColor,
+        dimOpacity: Double
+    ) {
         self.capture = capture
         self.script = script
         self.mode = mode
         self.style = style
+        self.accent = accent
+        self.dimOpacity = dimOpacity
         super.init(frame: NSRect(origin: .zero, size: capture.region.size))
     }
 
@@ -236,7 +247,7 @@ private final class ReaderView: NSView {
             let dim = NSBezierPath(rect: bounds)
             dim.append(NSBezierPath(roundedRect: lineRect.insetBy(dx: -6, dy: -4), xRadius: 4, yRadius: 4))
             dim.windingRule = .evenOdd
-            NSColor.black.withAlphaComponent(0.55).setFill()
+            NSColor.black.withAlphaComponent(dimOpacity).setFill()
             dim.fill()
         }
 

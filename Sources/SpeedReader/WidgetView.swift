@@ -23,6 +23,7 @@ final class WidgetViewModel: ObservableObject {
 struct WidgetView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var model: WidgetViewModel
+    @ObservedObject var stats: StatsStore
     var onStartReading: () -> Void
     var onToggleCollapse: () -> Void
 
@@ -69,6 +70,10 @@ struct WidgetView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
+            } else if let summary = stats.todaySummary {
+                Text(summary)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
         .animation(.easeInOut(duration: 0.15), value: model.statusMessage)
@@ -149,6 +154,30 @@ struct WidgetView: View {
                         .monospacedDigit()
                 }
                 .fixedSize()
+            }
+            HStack(spacing: 8) {
+                Text("Color")
+                    .font(.callout)
+                Spacer()
+                ForEach(GuideColor.allCases) { option in
+                    Circle()
+                        .fill(option.color)
+                        .frame(width: 16, height: 16)
+                        .overlay(
+                            Circle().strokeBorder(
+                                .white.opacity(settings.guideColorRaw == option.rawValue ? 0.9 : 0),
+                                lineWidth: 2
+                            )
+                        )
+                        .onTapGesture { settings.guideColorRaw = option.rawValue }
+                        .help(option.rawValue)
+                }
+            }
+            HStack {
+                Text("Dimming")
+                    .font(.callout)
+                Slider(value: $settings.dimOpacity, in: 0.25...0.85)
+                    .frame(width: 110)
             }
         }
         .transition(.opacity.combined(with: .move(edge: .top)))

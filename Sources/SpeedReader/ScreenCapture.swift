@@ -41,6 +41,7 @@ enum ScreenCapture {
     /// One-shot capture of `region` (AppKit global coords) on `screen`,
     /// excluding this app's own windows so the widget never appears in
     /// the OCR input.
+    @MainActor
     static func capture(region: NSRect, on screen: NSScreen) async throws -> CaptureResult {
         guard hasPermission() else { throw CaptureError.noPermission }
 

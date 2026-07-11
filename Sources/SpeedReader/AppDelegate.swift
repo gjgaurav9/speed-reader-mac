@@ -12,7 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let regionSelector = RegionSelector()
     private let debugOverlay = DebugOverlay()
     private let readingOverlay = ReadingOverlay()
+    private let stats = StatsStore.shared
     private var hasRequestedScreenPermission = false
+    private var lastSelection: RegionSelector.Selection?
 
     private static let widgetFrameKey = "widgetFrame"
 
@@ -46,10 +48,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let readItem = NSMenuItem(
             title: "Read Screen",
             action: #selector(startReading),
-            keyEquivalent: ""
+            keyEquivalent: "s"
         )
+        readItem.keyEquivalentModifierMask = [.option, .shift]
         readItem.target = self
         menu.addItem(readItem)
+
+        let againItem = NSMenuItem(
+            title: "Read Same Region Again",
+            action: #selector(readSameRegion),
+            keyEquivalent: "a"
+        )
+        againItem.keyEquivalentModifierMask = [.option, .shift]
+        againItem.target = self
+        menu.addItem(againItem)
 
         let debugItem = NSMenuItem(
             title: "Show OCR Boxes (Debug)",
@@ -77,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let content = WidgetView(
             settings: settings,
             model: widgetModel,
+            stats: stats,
             onStartReading: { [weak self] in self?.startReading() },
             onToggleCollapse: { [weak self] in self?.toggleCollapsed() }
         )
@@ -146,6 +159,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] in
             self?.toggleWidget()
         }
+        // ⌥⇧S — start reading (region select) from anywhere.
+        HotKeyCenter.shared.register(
+            keyCode: kVK_ANSI_S,
+            modifiers: optionKey | shiftKey
+        ) { [weak self] in
+            self?.startReading()
+        }
+        // ⌥⇧A — re-read the last region (e.g. after scrolling to new text).
+        HotKeyCenter.shared.register(
+            keyCode: kVK_ANSI_A,
+            modifiers: optionKey | shiftKey
+        ) { [weak self] in
+            self?.readSameRegion()
+        }
     }
 
     // MARK: - Widget visibility
@@ -178,41 +205,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         beginCapture(debugBoxes: true)
     }
 
+    /// Re-capture and read the previously selected region — the quick way to
+    /// continue after scrolling to the next page of text.
+    @objc private func readSameRegion() {
+        guard let lastSelection else {
+            widgetModel.flash("No region yet — use Read Screen (⌥⇧S) first.")
+            return
+        }
+        guard ensureScreenPermission() else { return }
+        dismissOverlays()
+        Task { @MainActor in
+            await read(selection: lastSelection, debugBoxes: false)
+        }
+    }
+
     private func beginCapture(debugBoxes: Bool) {
+        dismissOverlays()
+        guard ensureScreenPermission() else { return }
+
+        showWidget()
+        regionSelector.begin { [weak self] selection in
+            guard let self, let selection else { return }
+            self.lastSelection = selection
+            Task { @MainActor in
+                await self.read(selection: selection, debugBoxes: debugBoxes)
+            }
+        }
+    }
+
+    private func dismissOverlays() {
         if debugOverlay.isVisible {
             debugOverlay.dismiss()
         }
         if readingOverlay.isActive {
             readingOverlay.stop(notify: false)
         }
+    }
 
-        guard ScreenCapture.hasPermission() else {
-            if !hasRequestedScreenPermission {
-                // First ask: let the system prompt show on its own — opening
-                // System Settings at the same time can hide it.
-                hasRequestedScreenPermission = true
-                ScreenCapture.requestPermission()
-                widgetModel.flash(
-                    "macOS is asking for Screen Recording — allow it, then quit and reopen Speed Reader.",
-                    for: 12
-                )
-            } else {
-                widgetModel.flash(
-                    "Still no permission. Add SpeedReader.app with the + button in System Settings, then quit and reopen.",
-                    for: 12
-                )
-                ScreenCapture.openSystemSettings()
-            }
-            return
+    private func ensureScreenPermission() -> Bool {
+        guard !ScreenCapture.hasPermission() else { return true }
+        if !hasRequestedScreenPermission {
+            // First ask: let the system prompt show on its own — opening
+            // System Settings at the same time can hide it.
+            hasRequestedScreenPermission = true
+            ScreenCapture.requestPermission()
+            widgetModel.flash(
+                "macOS is asking for Screen Recording — allow it, then quit and reopen Speed Reader.",
+                for: 12
+            )
+        } else {
+            widgetModel.flash(
+                "Still no permission. Add SpeedReader.app with the + button in System Settings, then quit and reopen.",
+                for: 12
+            )
+            ScreenCapture.openSystemSettings()
         }
-
-        showWidget()
-        regionSelector.begin { [weak self] selection in
-            guard let self, let selection else { return }
-            Task { @MainActor in
-                await self.read(selection: selection, debugBoxes: debugBoxes)
-            }
-        }
+        return false
     }
 
     @MainActor
@@ -237,10 +285,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             } else {
                 widgetModel.flash("\(result.wordCount) words · go!", for: 3)
-                readingOverlay.start(capture: capture, result: result) { [weak self] stats in
-                    let verb = stats.finished ? "Finished" : "Stopped"
+                readingOverlay.start(capture: capture, result: result) { [weak self] sessionStats in
+                    self?.stats.record(sessionStats)
+                    let verb = sessionStats.finished ? "Finished" : "Stopped"
                     self?.widgetModel.flash(
-                        "\(verb): \(stats.wordsRead) words in \(Int(stats.elapsed))s · \(stats.effectiveWPM) wpm effective",
+                        "\(verb): \(sessionStats.wordsRead) words in \(Int(sessionStats.elapsed))s · \(sessionStats.effectiveWPM) wpm effective",
                         for: 8
                     )
                 }
