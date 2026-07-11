@@ -5,8 +5,12 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var widgetPanel: FloatingPanel!
+    private var hostingView: NSHostingView<WidgetView>!
     private let settings = AppSettings.shared
     private let widgetModel = WidgetViewModel()
+
+    private let regionSelector = RegionSelector()
+    private let debugOverlay = DebugOverlay()
 
     private static let widgetFrameKey = "widgetFrame"
 
@@ -64,15 +68,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings: settings,
             model: widgetModel,
             onStartReading: { [weak self] in self?.startReading() },
-            onClose: { [weak self] in self?.hideWidget() }
+            onToggleCollapse: { [weak self] in self?.toggleCollapsed() }
         )
-        let hosting = NSHostingView(rootView: content)
-        widgetPanel.contentView = hosting
+        hostingView = NSHostingView(rootView: content)
+        widgetPanel.contentView = hostingView
 
         if let saved = UserDefaults.standard.string(forKey: Self.widgetFrameKey) {
             widgetPanel.setFrame(NSRectFromString(saved), display: false)
         } else {
             positionWidgetTopRight()
+        }
+        // Normalize the frame to the current content (the saved frame may
+        // have been stored while collapsed).
+        DispatchQueue.main.async { [weak self] in
+            self?.resizePanelKeepingTopRight(animate: false)
         }
 
         NotificationCenter.default.addObserver(
@@ -94,6 +103,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         widgetPanel.setFrameOrigin(origin)
     }
 
+    /// Resize the panel to fit the SwiftUI content, keeping the top-right
+    /// corner where the user put it (widget lives in a corner, so the
+    /// top-right anchor feels stationary when collapsing/expanding).
+    private func resizePanelKeepingTopRight(animate: Bool) {
+        let size = hostingView.fittingSize
+        guard size.width > 1, size.height > 1 else { return }
+        let old = widgetPanel.frame
+        let newFrame = NSRect(
+            x: old.maxX - size.width,
+            y: old.maxY - size.height,
+            width: size.width,
+            height: size.height
+        )
+        widgetPanel.setFrame(newFrame, display: true, animate: animate)
+    }
+
     @objc private func widgetMoved() {
         UserDefaults.standard.set(
             NSStringFromRect(widgetPanel.frame),
@@ -113,27 +138,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Actions
+    // MARK: - Widget visibility
 
     @objc private func toggleWidget() {
-        widgetPanel.isVisible ? hideWidget() : showWidget()
+        widgetPanel.isVisible ? widgetPanel.orderOut(nil) : showWidget()
     }
 
     private func showWidget() {
-        // Clamp back on screen in case displays changed since last run.
         if !NSScreen.screens.contains(where: { $0.visibleFrame.intersects(widgetPanel.frame) }) {
             positionWidgetTopRight()
         }
         widgetPanel.orderFrontRegardless()
     }
 
-    private func hideWidget() {
-        widgetPanel.orderOut(nil)
+    private func toggleCollapsed() {
+        widgetModel.isCollapsed.toggle()
+        DispatchQueue.main.async { [weak self] in
+            self?.resizePanelKeepingTopRight(animate: true)
+        }
     }
 
+    // MARK: - Reading pipeline (Milestone 2: capture → OCR → debug boxes)
+
     @objc private func startReading() {
-        // Milestone 2 wires this to capture + OCR.
+        if debugOverlay.isVisible {
+            debugOverlay.dismiss()
+        }
+
+        guard ScreenCapture.hasPermission() else {
+            ScreenCapture.requestPermission()
+            widgetModel.flash(
+                "Enable Screen Recording for SpeedReader in System Settings, then quit and reopen.",
+                for: 10
+            )
+            ScreenCapture.openSystemSettings()
+            return
+        }
+
         showWidget()
-        widgetModel.flash("Capture + OCR arrives in Milestone 2 — controls and widget are live.")
+        regionSelector.begin { [weak self] selection in
+            guard let self, let selection else { return }
+            Task { @MainActor in
+                await self.read(selection: selection)
+            }
+        }
+    }
+
+    @MainActor
+    private func read(selection: RegionSelector.Selection) async {
+        do {
+            widgetModel.flash("Reading…", for: 30)
+            let capture = try await ScreenCapture.capture(
+                region: selection.rect,
+                on: selection.screen
+            )
+            let result = try await OCRService.recognize(capture)
+
+            guard !result.lines.isEmpty else {
+                widgetModel.flash("No text found in that region.")
+                return
+            }
+
+            debugOverlay.show(capture: capture, result: result)
+            widgetModel.flash(
+                "\(result.lines.count) lines · \(result.wordCount) words · \(Int(result.duration * 1000)) ms"
+            )
+        } catch {
+            widgetModel.flash("Capture failed: \(error.localizedDescription)", for: 8)
+        }
     }
 }

@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// State the app pushes into the widget (status line under the Read button).
+/// State the app pushes into the widget (status line under the Read button,
+/// collapsed/expanded presentation).
 final class WidgetViewModel: ObservableObject {
     @Published var statusMessage: String?
+    @Published var isCollapsed = false
 
     private var clearTask: Task<Void, Never>?
 
@@ -22,11 +24,19 @@ struct WidgetView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var model: WidgetViewModel
     var onStartReading: () -> Void
-    var onClose: () -> Void
+    var onToggleCollapse: () -> Void
 
     @State private var showSettings = false
 
     var body: some View {
+        if model.isCollapsed {
+            CollapsedPill(onExpand: onToggleCollapse)
+        } else {
+            expandedBody
+        }
+    }
+
+    private var expandedBody: some View {
         VStack(spacing: 12) {
             header
 
@@ -89,12 +99,12 @@ struct WidgetView: View {
             }
             .buttonStyle(.plain)
             .help("Reading options")
-            Button(action: onClose) {
+            Button(action: onToggleCollapse) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Hide widget (⌥⇧R to bring back)")
+            .help("Minimize to a line (click the line to reopen)")
         }
     }
 
@@ -142,5 +152,34 @@ struct WidgetView: View {
             }
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+}
+
+/// The minimized state: a slim orange line, Pomodoro-style. Orange is the
+/// Speed Reader signature so it's never confused with the (blue) Pomodoro.
+private struct CollapsedPill: View {
+    var onExpand: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [Color.orange, Color(red: 1.0, green: 0.45, blue: 0.2)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(width: 120, height: hovering ? 12 : 8)
+            .shadow(color: .orange.opacity(hovering ? 0.7 : 0.45), radius: hovering ? 8 : 5)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                withAnimation(.easeOut(duration: 0.12)) { hovering = inside }
+            }
+            .onTapGesture(perform: onExpand)
+            .help("Speed Reader — click to open")
     }
 }
