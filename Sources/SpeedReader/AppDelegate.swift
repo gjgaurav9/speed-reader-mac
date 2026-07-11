@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let regionSelector = RegionSelector()
     private let debugOverlay = DebugOverlay()
     private let readingOverlay = ReadingOverlay()
+    private var hasRequestedScreenPermission = false
 
     private static let widgetFrameKey = "widgetFrame"
 
@@ -186,12 +187,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         guard ScreenCapture.hasPermission() else {
-            ScreenCapture.requestPermission()
-            widgetModel.flash(
-                "Enable Screen Recording for Speed Reader in System Settings, then quit and reopen.",
-                for: 10
-            )
-            ScreenCapture.openSystemSettings()
+            if !hasRequestedScreenPermission {
+                // First ask: let the system prompt show on its own — opening
+                // System Settings at the same time can hide it.
+                hasRequestedScreenPermission = true
+                ScreenCapture.requestPermission()
+                widgetModel.flash(
+                    "macOS is asking for Screen Recording — allow it, then quit and reopen Speed Reader.",
+                    for: 12
+                )
+            } else {
+                widgetModel.flash(
+                    "Still no permission. Add SpeedReader.app with the + button in System Settings, then quit and reopen.",
+                    for: 12
+                )
+                ScreenCapture.openSystemSettings()
+            }
             return
         }
 
