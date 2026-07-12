@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let stats = StatsStore.shared
     private var hasRequestedScreenPermission = false
     private var lastSelection: RegionSelector.Selection?
+    private var scrollMonitor: Any?
+    private var scrollSettleWork: DispatchWorkItem?
+    private let onboarding = OnboardingController()
 
     private static let widgetFrameKey = "widgetFrame"
 
@@ -23,7 +26,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpStatusItem()
         setUpWidgetPanel()
         setUpHotKeys()
+        readingOverlay.onScrolledAway = { [weak self] in
+            self?.continueAfterScroll()
+        }
         showWidget()
+        onboarding.onStartReading = { [weak self] in self?.startReading() }
+        onboarding.showIfNeeded()
+    }
+
+    // MARK: - Auto re-read on scroll
+
+    /// The user scrolled out of a frozen reading session: wait for scrolling
+    /// to settle, then re-capture the same region and continue reading.
+    private func continueAfterScroll() {
+        widgetModel.flash("Scrolling — will continue when you stop…", for: 6)
+        removeScrollMonitor()
+        scrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] _ in
+            self?.bumpScrollSettleTimer()
+        }
+        // Covers single-tick scrolls (and systems where the global monitor
+        // delivers nothing): re-read after a beat regardless.
+        bumpScrollSettleTimer()
+    }
+
+    private func bumpScrollSettleTimer() {
+        scrollSettleWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.removeScrollMonitor()
+            self.readSameRegion()
+        }
+        scrollSettleWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: work)
+    }
+
+    private func cancelScrollContinuation() {
+        scrollSettleWork?.cancel()
+        scrollSettleWork = nil
+        removeScrollMonitor()
+    }
+
+    private func removeScrollMonitor() {
+        if let scrollMonitor {
+            NSEvent.removeMonitor(scrollMonitor)
+            self.scrollMonitor = nil
+        }
     }
 
     // MARK: - Status item
@@ -79,6 +126,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         displayItem.target = self
         menu.addItem(displayItem)
+
+        let welcomeItem = NSMenuItem(
+            title: "Welcome Guide",
+            action: #selector(showWelcome),
+            keyEquivalent: ""
+        )
+        welcomeItem.target = self
+        menu.addItem(welcomeItem)
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
@@ -221,11 +276,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             widgetModel.flash("No region yet — use Read Screen (⌥⇧S) first.")
             return
         }
+        cancelScrollContinuation()
         dismissOverlays()
         Task { @MainActor in
             guard let route = await obtainCaptureRoute() else { return }
             await read(selection: lastSelection, debugBoxes: false, route: route)
         }
+    }
+
+    @objc private func showWelcome() {
+        onboarding.show()
     }
 
     /// Forget the picked display; the next capture re-presents the picker.
@@ -237,6 +297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func beginCapture(debugBoxes: Bool) {
+        cancelScrollContinuation()
         dismissOverlays()
         Task { @MainActor in
             guard let route = await obtainCaptureRoute() else { return }

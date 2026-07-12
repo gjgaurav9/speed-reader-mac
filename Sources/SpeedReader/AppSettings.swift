@@ -54,6 +54,7 @@ final class AppSettings: ObservableObject {
     @AppStorage("guideColor") var guideColorRaw: String = GuideColor.orange.rawValue
     @AppStorage("dimOpacity") var dimOpacity: Double = 0.55
     @AppStorage("readAloud") var readAloud: Bool = false
+    @AppStorage("autoReread") var autoReread: Bool = true
 
     var guideColor: GuideColor {
         get { GuideColor(rawValue: guideColorRaw) ?? .orange }

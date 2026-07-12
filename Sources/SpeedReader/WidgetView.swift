@@ -186,6 +186,13 @@ struct WidgetView: View {
             .toggleStyle(.switch)
             .controlSize(.mini)
             .help("Speak the text and let the highlight follow the voice")
+            Toggle(isOn: $settings.autoReread) {
+                Label("Continue after scroll", systemImage: "arrow.down.doc")
+                    .font(.callout)
+            }
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .help("Scroll during a session and reading resumes on the new content automatically")
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
     }

@@ -10,6 +10,8 @@
 	<string>Speed Reader</string>
 	<key>CFBundleExecutable</key>
 	<string>SpeedReader</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

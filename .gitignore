@@ -3,3 +3,4 @@
 .DS_Store
 *.xcodeproj
 build/
+Support/AppIcon.iconset/

@@ -17,6 +17,11 @@ struct ReadingStats {
 ///
 /// Controls: Space/click pause · ←/→ sentence jump · ↑/↓ speed · Esc exit.
 final class ReadingOverlay {
+    /// Called when the user scrolls during a session with auto re-read on:
+    /// the session has already ended; the owner should watch for the scroll
+    /// to settle and re-capture.
+    var onScrolledAway: (() -> Void)?
+
     private var window: OverlayWindow?
     private var view: ReaderView?
     private var script: ReadingScript?
@@ -174,6 +179,13 @@ final class ReadingOverlay {
             applySpeedChange()
         case .exit:
             stop(finished: false)
+        case .scrolled:
+            // The frozen frame is stale once the user scrolls the content
+            // underneath. End the session and hand off to auto re-read.
+            if settings.autoReread {
+                stop(finished: false)
+                onScrolledAway?()
+            }
         }
     }
 
@@ -203,7 +215,7 @@ final class ReadingOverlay {
 
 private final class ReaderView: NSView {
     enum Key {
-        case togglePause, previousSentence, nextSentence, faster, slower, exit
+        case togglePause, previousSentence, nextSentence, faster, slower, exit, scrolled
     }
 
     var onKey: ((Key) -> Void)?
@@ -253,6 +265,10 @@ private final class ReaderView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         onKey?(.togglePause)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        onKey?(.scrolled)
     }
 
     override func keyDown(with event: NSEvent) {

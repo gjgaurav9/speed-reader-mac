@@ -11,9 +11,12 @@ swift build -c release
 
 APP="build/SpeedReader.app"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/SpeedReader "$APP/Contents/MacOS/SpeedReader"
 cp Support/Info.plist "$APP/Contents/Info.plist"
+if [ -f Support/AppIcon.icns ]; then
+    cp Support/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+fi
 
 # Prefer a stable signing identity (e.g. a self-signed "SpeedReader Dev"
 # certificate, or a real Apple Development cert) so the Screen Recording

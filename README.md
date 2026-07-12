@@ -21,7 +21,13 @@ behind the design.
 - ✅ **Milestone 4 — polish**: global hotkeys (⌥⇧S read, ⌥⇧A re-read last
   region — the scroll-and-continue flow), highlight color + dimming
   intensity settings, persistent daily reading stats in the widget.
-- ⬜ Milestone 5 — ship (signing, notarization, Sparkle, onboarding).
+- ✅ **Read aloud**: on-device voice speaks the text; the highlight follows
+  the spoken word karaoke-style (gear → Read aloud).
+- ✅ **Auto re-read on scroll**: scroll during a session and reading resumes
+  automatically on the new content once scrolling settles (gear toggle).
+- 🟡 **Milestone 5 — ship**: app icon ✅, first-run welcome guide ✅, DMG
+  packaging ✅ (`Support/release.sh`). Remaining: Developer ID signing +
+  notarization (needs a paid Apple Developer account) and auto-updates.
 
 ## Run
 
@@ -48,6 +54,7 @@ bar. No Dock icon — it's a menu-bar utility.
 | Reading options | Gear icon on the widget |
 | Start reading | Read Screen button → drag-select the text region |
 | While reading | Space/click pause · ←/→ sentence jump · ↑/↓ ±25 wpm · Esc exit |
+| Continue reading | Just scroll — it re-captures and resumes when you stop |
 | Quit | Menu-bar icon → Quit Speed Reader |
 
 Clicking the widget never steals focus from the app you're reading
