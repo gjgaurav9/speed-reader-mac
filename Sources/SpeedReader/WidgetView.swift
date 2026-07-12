@@ -179,6 +179,13 @@ struct WidgetView: View {
                 Slider(value: $settings.dimOpacity, in: 0.25...0.85)
                     .frame(width: 110)
             }
+            Toggle(isOn: $settings.readAloud) {
+                Label("Read aloud", systemImage: "speaker.wave.2")
+                    .font(.callout)
+            }
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .help("Speak the text and let the highlight follow the voice")
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
     }

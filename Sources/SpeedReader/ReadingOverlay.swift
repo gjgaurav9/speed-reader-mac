@@ -21,6 +21,7 @@ final class ReadingOverlay {
     private var view: ReaderView?
     private var script: ReadingScript?
     private var stepWork: DispatchWorkItem?
+    private var speech: SpeechPacer?
 
     private var index = 0
     private var paused = false
@@ -28,6 +29,8 @@ final class ReadingOverlay {
     private var onFinish: ((ReadingStats) -> Void)?
 
     private let settings = AppSettings.shared
+
+    private var isSpeaking: Bool { speech != nil }
 
     var isActive: Bool { window != nil }
 
@@ -65,12 +68,30 @@ final class ReadingOverlay {
         self.view = view
 
         render()
-        scheduleStep()
+        if settings.readAloud {
+            let pacer = SpeechPacer()
+            pacer.onChunk = { [weak self] chunkIndex in
+                guard let self else { return }
+                self.index = chunkIndex
+                self.render()
+            }
+            pacer.onFinished = { [weak self] in
+                guard let self else { return }
+                self.index = self.script?.chunks.count ?? self.index
+                self.stop(finished: true)
+            }
+            speech = pacer
+            pacer.start(script: script, from: 0, wpm: settings.wpm)
+        } else {
+            scheduleStep()
+        }
     }
 
     func stop(finished: Bool = false, notify: Bool = true) {
         stepWork?.cancel()
         stepWork = nil
+        speech?.stop()
+        speech = nil
         window?.orderOut(nil)
         window = nil
         view = nil
@@ -129,7 +150,9 @@ final class ReadingOverlay {
         switch key {
         case .togglePause:
             paused.toggle()
-            if paused {
+            if let speech {
+                paused ? speech.pause() : speech.resume()
+            } else if paused {
                 stepWork?.cancel()
             } else {
                 scheduleStep()
@@ -145,19 +168,34 @@ final class ReadingOverlay {
             }
         case .faster:
             settings.wpm = min(settings.wpm + 25, AppSettings.wpmRange.upperBound)
-            render()
+            applySpeedChange()
         case .slower:
             settings.wpm = max(settings.wpm - 25, AppSettings.wpmRange.lowerBound)
-            render()
+            applySpeedChange()
         case .exit:
             stop(finished: false)
         }
     }
 
+    /// An utterance's rate is fixed once started, so speed changes while
+    /// speaking restart the voice from the current chunk at the new rate.
+    private func applySpeedChange() {
+        if isSpeaking {
+            restartStep()
+        } else {
+            render()
+        }
+    }
+
     private func restartStep() {
         stepWork?.cancel()
+        paused = false
         render()
-        scheduleStep()
+        if let speech, let script {
+            speech.start(script: script, from: index, wpm: settings.wpm)
+        } else {
+            scheduleStep()
+        }
     }
 }
 
