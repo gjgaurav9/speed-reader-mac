@@ -198,31 +198,39 @@ struct WidgetView: View {
     }
 }
 
-/// The minimized state: a slim orange line, Pomodoro-style. Orange is the
-/// Speed Reader signature so it's never confused with the (blue) Pomodoro.
+/// The minimized state, styled after the Pomodoro app's minimized pill:
+/// a thin colored line inside a small dark capsule. Orange is the Speed
+/// Reader signature so it's never confused with the (blue) Pomodoro.
 private struct CollapsedPill: View {
     var onExpand: () -> Void
 
     @State private var hovering = false
 
     var body: some View {
-        Capsule()
-            .fill(
-                LinearGradient(
-                    colors: [Color.orange, Color(red: 1.0, green: 0.45, blue: 0.2)],
-                    startPoint: .leading,
-                    endPoint: .trailing
+        ZStack {
+            Capsule()
+                .fill(.black.opacity(hovering ? 0.9 : 0.75))
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 1.0, green: 0.63, blue: 0.32),
+                            Color(red: 0.95, green: 0.47, blue: 0.18),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
-            .frame(width: 120, height: hovering ? 12 : 8)
-            .shadow(color: .orange.opacity(hovering ? 0.7 : 0.45), radius: hovering ? 8 : 5)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            .onHover { inside in
-                withAnimation(.easeOut(duration: 0.12)) { hovering = inside }
-            }
-            .onTapGesture(perform: onExpand)
-            .help("Speed Reader — click to open")
+                .frame(width: 76, height: 5)
+                .opacity(hovering ? 1.0 : 0.9)
+        }
+        .frame(width: 104, height: 17)
+        .padding(3)
+        .contentShape(Capsule())
+        .onHover { inside in
+            withAnimation(.easeOut(duration: 0.12)) { hovering = inside }
+        }
+        .onTapGesture(perform: onExpand)
+        .help("Speed Reader — click to open")
     }
 }
