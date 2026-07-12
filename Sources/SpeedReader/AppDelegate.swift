@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import ScreenCaptureKit
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -70,6 +71,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         debugItem.target = self
         menu.addItem(debugItem)
+
+        let displayItem = NSMenuItem(
+            title: "Change Shared Display…",
+            action: #selector(changeSharedDisplay),
+            keyEquivalent: ""
+        )
+        displayItem.target = self
+        menu.addItem(displayItem)
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
@@ -212,24 +221,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             widgetModel.flash("No region yet — use Read Screen (⌥⇧S) first.")
             return
         }
-        guard ensureScreenPermission() else { return }
         dismissOverlays()
         Task { @MainActor in
-            await read(selection: lastSelection, debugBoxes: false)
+            guard let route = await obtainCaptureRoute() else { return }
+            await read(selection: lastSelection, debugBoxes: false, route: route)
         }
+    }
+
+    /// Forget the picked display; the next capture re-presents the picker.
+    @objc private func changeSharedDisplay() {
+        Task { @MainActor in
+            ContentPickerSession.shared.invalidate()
+        }
+        widgetModel.flash("Pick a display on the next Read Screen.")
     }
 
     private func beginCapture(debugBoxes: Bool) {
         dismissOverlays()
-        guard ensureScreenPermission() else { return }
-
-        showWidget()
-        regionSelector.begin { [weak self] selection in
-            guard let self, let selection else { return }
-            self.lastSelection = selection
-            Task { @MainActor in
-                await self.read(selection: selection, debugBoxes: debugBoxes)
+        Task { @MainActor in
+            guard let route = await obtainCaptureRoute() else { return }
+            self.showWidget()
+            self.regionSelector.begin { [weak self] selection in
+                guard let self, let selection else { return }
+                self.lastSelection = selection
+                Task { @MainActor in
+                    await self.read(selection: selection, debugBoxes: debugBoxes, route: route)
+                }
             }
+        }
+    }
+
+    private enum CaptureRoute {
+        /// System-picker filter: silent captures, no recurring consent prompt.
+        case picker(SCContentFilter)
+        /// Direct ScreenCaptureKit capture: needs the Screen Recording TCC
+        /// grant and triggers the recurring macOS consent prompt.
+        case legacy
+    }
+
+    @MainActor
+    private func obtainCaptureRoute() async -> CaptureRoute? {
+        switch await ContentPickerSession.shared.obtainFilter() {
+        case .filter(let filter):
+            return .picker(filter)
+        case .cancelled:
+            widgetModel.flash("Display sharing cancelled.")
+            return nil
+        case .failed:
+            widgetModel.flash("System picker unavailable — using direct capture.", for: 4)
+            return ensureScreenPermission() ? .legacy : nil
         }
     }
 
@@ -264,13 +304,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
-    private func read(selection: RegionSelector.Selection, debugBoxes: Bool) async {
+    private func read(selection: RegionSelector.Selection, debugBoxes: Bool, route: CaptureRoute) async {
         do {
             widgetModel.flash("Reading…", for: 30)
-            let capture = try await ScreenCapture.capture(
-                region: selection.rect,
-                on: selection.screen
-            )
+
+            // Hide our own windows during the capture: the picker filter
+            // captures the whole display, including the widget.
+            let widgetWasVisible = widgetPanel.isVisible
+            if widgetWasVisible { widgetPanel.orderOut(nil) }
+            try? await Task.sleep(nanoseconds: 80_000_000)
+
+            let capture: CaptureResult
+            do {
+                switch route {
+                case .picker(let filter):
+                    capture = try await ScreenCapture.capture(region: selection.rect, using: filter)
+                case .legacy:
+                    capture = try await ScreenCapture.capture(region: selection.rect, on: selection.screen)
+                }
+            } catch {
+                if widgetWasVisible { showWidget() }
+                throw error
+            }
+            if widgetWasVisible { showWidget() }
             let result = try await OCRService.recognize(capture)
 
             guard !result.lines.isEmpty else {
