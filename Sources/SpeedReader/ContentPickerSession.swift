@@ -66,6 +66,11 @@ final class ContentPickerSession: NSObject {
         if case .filter(let filter) = outcome {
             cachedFilter = filter
         }
+        // Deactivate the sharing session as soon as the pick is made:
+        // leaving it active keeps the system's "screen is being shared"
+        // indication on the whole display. The cached filter remains valid
+        // for one-shot captures.
+        SCContentSharingPicker.shared.isActive = false
         continuation?.resume(returning: outcome)
         continuation = nil
     }
